@@ -18,7 +18,7 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
     if (args.len <= 1) {
-        try stdout.writer().print("ERROR: not enought arguments\nExample usage:\ntd <./> || td <filename.ext>\n", .{});
+        try stdout.writer().print("ERROR: not enough arguments\nExample usage:\ntd <./> || td <filename.ext>\n", .{});
         std.process.exit(1);
     }
 
@@ -48,6 +48,9 @@ pub fn main() !void {
                 try find_todos(allocator, &todos, full_path);
             }
         }
+    } else {
+        try stdout.writer().print("ERROR: Target not found.\nExample usage:\ntd <./> || td <filename.ext>\n", .{});
+        std.process.exit(1);
     }
 
     const slice = try todos.toOwnedSlice();
@@ -60,7 +63,6 @@ pub fn main() !void {
     }
 
     std.mem.sort(Todo, slice, {}, cmpByData);
-
     for (slice) |item| {
         try stdout.writer().print("{}:{}:{s}:{s}\n", .{ item.line, item.column, item.filepath, item.content });
     }
@@ -78,24 +80,24 @@ fn find_todos(allocator: std.mem.Allocator, todo_list: *std.ArrayList(Todo), pat
 
     var line_count: usize = 1;
     while (try in_stream.readUntilDelimiterOrEofAlloc(allocator, '\n', std.math.maxInt(usize))) |line| {
-        if (contains(line, "TODO")) { // TODO: get rid of this
-            const index = std.mem.indexOf(u8, line, "TODO");
-            if (index) |column| {
-                const priority = get_priority(line, column);
-                const trimmed = std.mem.trimLeft(u8, line, " ");
-                const content = try allocator.dupe(u8, trimmed);
-                const my_path = try allocator.dupe(u8, path);
+        defer allocator.free(line);
+        const index = std.mem.indexOf(u8, line, "TODO");
+        if (index) |column| {
+            const priority = get_priority(line, column);
+            const trimmed = std.mem.trimLeft(u8, line, " ");
+            const content = try allocator.dupe(u8, trimmed);
+            const my_path = try allocator.dupe(u8, path);
 
-                const t = Todo{
-                    .priority = priority,
-                    .filepath = my_path,
-                    .content = content,
-                    .line = line_count,
-                    .column = column + 4,
-                };
-                try todo_list.append(t);
-            }
+            const t = Todo{
+                .priority = priority,
+                .filepath = my_path,
+                .content = content,
+                .line = line_count,
+                .column = column + 4,
+            };
+            try todo_list.append(t);
         }
+
         line_count += 1;
     }
 }

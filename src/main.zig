@@ -1,7 +1,7 @@
 const std = @import("std");
-// TODO: actually implement directories to skip or files :)
-
 const debug_print = std.debug.print;
+
+const skip_fs_ext = &[_][]const u8{ ".exe", ".json", ".dll", ".pbd", ".sample", ".obj" };
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -43,6 +43,16 @@ pub fn main() !void {
 
         while (try walker.next()) |entry| {
             const full_path = try std.fmt.allocPrint(allocator, "{s}{s}", .{ path, entry.path });
+            const ext = std.fs.path.extension(full_path);
+            if (entry.path[0] == '.') {
+                continue;
+            }
+            for (skip_fs_ext) |e| {
+                if (std.mem.eql(u8, e, ext)) {
+                    continue;
+                }
+            }
+
             defer allocator.free(full_path);
             if (isFile(full_path)) {
                 try find_todos(allocator, &todos, full_path);
@@ -54,14 +64,6 @@ pub fn main() !void {
     }
 
     const slice = try todos.toOwnedSlice();
-    defer {
-        for (slice) |todo| {
-            allocator.free(todo.content);
-            allocator.free(todo.filepath);
-        }
-        allocator.free(slice);
-    }
-
     std.mem.sort(Todo, slice, {}, cmpByData);
     for (slice) |item| {
         try stdout.writer().print("{}:{}:{s}:{s}\n", .{ item.line, item.column, item.filepath, item.content });
@@ -128,10 +130,6 @@ const Todo = struct {
     content: []const u8,
     line: usize,
     column: usize,
-
-    pub fn print(self: Self) void {
-        debug_print("line: {}, column: {}, priority: {}, filepath: {s}, content:{s}\n", .{ self.line, self.column, self.priority, self.filepath, self.content });
-    }
 };
 
 pub fn isFile(path: []const u8) bool {
